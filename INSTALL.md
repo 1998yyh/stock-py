@@ -1,74 +1,47 @@
-# 快速安装指南
+# 阿里云Linux安装指南
 
-## 🚀 一键部署命令
+## 🌐 适用系统
+- **Alibaba Cloud Linux 3.2104 LTS 64位**
+- **CentOS 7/8**
+- **RHEL 7/8**
 
-### 在服务器上运行以下命令：
+## 🚀 一键安装
 
-```bash
-# 1. 下载项目（如果使用git）
-git clone <your-repo-url> stock-filter
-cd stock-filter
-
-# 2. 一键部署
-chmod +x deploy.sh && ./deploy.sh
-
-# 3. 启动服务
-./start.sh production  # 生产环境
-```
-
-## 📋 手动安装步骤
-
-### 1. 系统要求
-- **操作系统**: Ubuntu 18.04+ / CentOS 7+ / Debian 9+
-- **Python**: 3.8+
-- **内存**: 最少 512MB
-- **磁盘**: 最少 1GB
-
-### 2. 安装 Python 环境
-
-**Ubuntu/Debian:**
-```bash
-sudo apt update
-sudo apt install -y python3 python3-pip python3-venv
-```
-
-**CentOS/RHEL:**
-```bash
-sudo yum install -y python3 python3-pip
-```
-
-### 3. 部署项目
+### 在阿里云服务器上运行：
 
 ```bash
-# 创建项目目录
-mkdir -p ~/stock-filter
-cd ~/stock-filter
+# 1. 上传项目文件到服务器
+# 2. 运行安装脚本
+chmod +x install_aliyun.sh
+./install_aliyun.sh
 
-# 复制项目文件到此目录
+# 3. 配置防火墙
+sudo firewall-cmd --permanent --add-port=5000/tcp
+sudo firewall-cmd --reload
 
-# 创建虚拟环境
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 启动服务
-python3 app.py
+# 4. 启动服务
+./start_aliyun.sh background  # 后台运行
 ```
 
-### 4. 访问服务
+## 📱 阿里云安全组配置
 
-打开浏览器访问：`http://服务器IP:5000`
+在阿里云控制台：
+1. 进入 **ECS管理控制台**
+2. 选择 **网络与安全** > **安全组**  
+3. 点击 **配置规则**
+4. 添加入方向规则：
+   - **协议类型**: TCP
+   - **端口范围**: 5000/5000
+   - **授权对象**: 0.0.0.0/0
 
 ## 🔧 常用命令
 
 ```bash
-# 启动服务（前台）
-./start.sh
+# 前台启动
+./start_aliyun.sh
 
-# 启动服务（后台）
-./start.sh production
+# 后台启动  
+./start_aliyun.sh background
 
 # 查看服务状态
 ps aux | grep python
@@ -82,28 +55,29 @@ tail -f logs/app.log
 
 ## ⚡ 快速测试
 
-部署完成后，可以运行以下命令测试：
-
 ```bash
+# 本地测试
 curl http://localhost:5000/api/config
+
+# 外网测试（替换为您的公网IP）
+curl http://your-server-ip:5000/api/config
 ```
 
-如果返回JSON数据，说明服务正常运行。
+## 🆘 常见问题
 
-## 🆘 遇到问题？
-
-1. **检查端口是否被占用**:
+1. **编译错误**:
    ```bash
-   netstat -tlnp | grep :5000
+   sudo yum install -y gcc gcc-c++ python3-devel
    ```
 
-2. **检查防火墙设置**:
+2. **akshare安装失败**:
    ```bash
-   sudo ufw status  # Ubuntu
-   sudo firewall-cmd --list-ports  # CentOS
+   # 系统会自动切换到模拟数据模式
+   # 检查是否使用了 stock_minimal.py
    ```
 
-3. **查看详细日志**:
+3. **访问被拒绝**:
    ```bash
-   tail -f logs/app.log
+   # 检查防火墙和安全组设置
+   sudo firewall-cmd --list-ports
    ```
