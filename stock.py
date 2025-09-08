@@ -193,6 +193,28 @@ SELECT_CONFIG={
     'Ratio':1           # 量比最小值
 }
 
+def get_last_trading_day(date=None):
+    """获取上个交易日日期
+    :param date: 指定日期，默认为今天
+    :return: 上个交易日的日期字符串 (YYYY-MM-DD)
+    """
+    if date is None:
+        current = datetime.datetime.now()
+    else:
+        if isinstance(date, str):
+            current = datetime.datetime.strptime(date, "%Y-%m-%d")
+        else:
+            current = date
+    
+    # 往前推，找到上个工作日
+    last_day = current - datetime.timedelta(days=1)
+    
+    # 如果是周末，继续往前推
+    while last_day.weekday() >= 5:  # 5=周六, 6=周日
+        last_day = last_day - datetime.timedelta(days=1)
+    
+    return last_day.strftime("%Y-%m-%d")
+
 def get_data_date_info():
     """获取数据对应的日期信息"""
     now = datetime.datetime.now()
@@ -200,12 +222,12 @@ def get_data_date_info():
     cutoff_time = datetime.time(14, 50)  # 14:50
     
     today = now.strftime("%Y-%m-%d")
-    yesterday = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    last_trading_day = get_last_trading_day()
     
     # 判断当前应该显示哪天的数据
     if current_time < cutoff_time:
-        # 14:50前显示昨日数据
-        data_date = yesterday
+        # 14:50前显示上个交易日数据
+        data_date = last_trading_day
         is_today_data = False
         next_update_time = datetime.datetime.combine(now.date(), cutoff_time)
     else:
@@ -219,9 +241,10 @@ def get_data_date_info():
     return {
         'data_date': data_date,
         'is_today_data': is_today_data,
+        'last_trading_day': last_trading_day,
         'current_time': now.strftime("%Y-%m-%d %H:%M:%S"),
         'next_update_time': next_update_time.strftime("%Y-%m-%d %H:%M:%S"),
-        'time_status': '今日数据' if is_today_data else f'昨日数据（{cutoff_time.strftime("%H:%M")}后更新为今日数据）'
+        'time_status': '今日数据' if is_today_data else f'上个交易日数据（{last_trading_day}，{cutoff_time.strftime("%H:%M")}后更新为今日数据）'
     }
 
 def get_active_stocks(use_cache=True, save_cache=True, force_refresh=False):
@@ -232,24 +255,24 @@ def get_active_stocks(use_cache=True, save_cache=True, force_refresh=False):
     """
     now = datetime.datetime.now()
     today = now.strftime("%Y-%m-%d")
-    yesterday = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    last_trading_day = get_last_trading_day()
     current_time = now.time()
     
     # 判断当前时间是否在14:50之前
     cutoff_time = datetime.time(14, 50)  # 14:50
     
-    # 如果不是强制刷新，且当前时间在14:50之前，尝试读取昨日数据
+    # 如果不是强制刷新，且当前时间在14:50之前，尝试读取上个交易日数据
     if not force_refresh and current_time < cutoff_time and use_cache:
-        yesterday_cache = os.path.join("data", f"{yesterday}_current_stocks.txt")
-        if os.path.exists(yesterday_cache):
+        last_trading_day_cache = os.path.join("data", f"{last_trading_day}_current_stocks.txt")
+        if os.path.exists(last_trading_day_cache):
             try:
-                print(f"📁 14:50前，从缓存读取昨日数据: {yesterday_cache}")
-                cached_data = pd.read_csv(yesterday_cache, sep="\t", encoding="utf-8")
+                print(f"📁 14:50前，从缓存读取上个交易日数据: {last_trading_day_cache}")
+                cached_data = pd.read_csv(last_trading_day_cache, sep="\t", encoding="utf-8")
                 if not cached_data.empty:
-                    print(f"✅ 昨日缓存数据加载成功，共 {len(cached_data)} 只股票")
+                    print(f"✅ 上个交易日缓存数据加载成功，共 {len(cached_data)} 只股票")
                     return cached_data
             except Exception as e:
-                print(f"⚠️ 昨日缓存读取失败: {e}")
+                print(f"⚠️ 上个交易日缓存读取失败: {e}")
     
     # 检查今日缓存（14:50后或强制刷新时优先使用）
     if use_cache and not force_refresh:

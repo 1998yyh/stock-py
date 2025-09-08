@@ -306,6 +306,21 @@
             background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
             color: #000;
         }
+        
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 12px;
+            margin: 0 2px;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
+        }
     </style>
 </head>
 <body>
@@ -376,6 +391,15 @@
                     <button class="btn" onclick="loadCacheStatus()">刷新缓存状态</button>
                 </div>
                 <div id="cache-result" class="result"></div>
+                
+                <!-- 缓存数据展示区域 -->
+                <div id="cache-data-view" style="display: none; margin-top: 30px;">
+                    <div class="result-header">
+                        <h3>缓存数据查看</h3>
+                        <button class="btn btn-sm" onclick="closeCacheDataView()">关闭</button>
+                    </div>
+                    <div id="cache-data-content" class="result"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -647,6 +671,8 @@
                                 <th>类型</th>
                                 <th>大小</th>
                                 <th>修改时间</th>
+                                <th>距今涨幅</th>
+                                <th>操作</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -661,6 +687,13 @@
                         <td class="${typeClass}">${typeLabel}</td>
                         <td>${formatFileSize(file.size)}</td>
                         <td>${file.modified_time}</td>
+                        <td id="price-change-${file.filename}">
+                            <button class="btn btn-sm btn-warning" onclick="queryPriceChange('${file.filename}')" title="查询距今涨幅">📈 查询</button>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm" onclick="viewCacheData('${file.filename}')" title="查看数据">👁️</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteCacheFile('${file.filename}')" title="删除文件">🗑️</button>
+                        </td>
                     </tr>
                 `;
             });
@@ -680,6 +713,251 @@
             const sizes = ['B', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 查看缓存数据
+        async function viewCacheData(filename) {
+            const contentDiv = document.getElementById('cache-data-content');
+            const viewDiv = document.getElementById('cache-data-view');
+            
+            showLoading('cache-data-content');
+            viewDiv.style.display = 'block';
+            
+            // 滚动到数据查看区域
+            viewDiv.scrollIntoView({ behavior: 'smooth' });
+            
+            try {
+                const response = await fetch(`${API_BASE}/cache/view?file=${encodeURIComponent(filename)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayCacheDataTable(contentDiv, data.data, data.file_info);
+                } else {
+                    showError('cache-data-content', data.message);
+                }
+            } catch (error) {
+                showError('cache-data-content', '请求失败: ' + error.message);
+            }
+        }
+
+        // 关闭缓存数据查看
+        function closeCacheDataView() {
+            document.getElementById('cache-data-view').style.display = 'none';
+        }
+
+        // 删除单个缓存文件
+        async function deleteCacheFile(filename) {
+            if (!confirm(`确定要删除缓存文件 "${filename}" 吗？`)) {
+                return;
+            }
+            
+            try {
+                // 提取日期部分
+                const dateMatch = filename.match(/(\d{4}-\d{2}-\d{2})/);
+                const dateStr = dateMatch ? dateMatch[1] : null;
+                
+                const response = await fetch(`${API_BASE}/cache/clear`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        type: 'current',
+                        date: dateStr
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(data.message);
+                    loadCacheStatus(); // 重新加载缓存状态
+                    closeCacheDataView(); // 如果正在查看被删除的文件，关闭查看窗口
+                } else {
+                    alert('删除失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
+        }
+
+        // 查询距今涨幅
+        async function queryPriceChange(filename) {
+            const cellId = `price-change-${filename}`;
+            const cell = document.getElementById(cellId);
+            
+            if (!cell) return;
+            
+            // 显示加载状态
+            cell.innerHTML = '<span class="loading" style="font-size: 12px;">查询中...</span>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/cache/price-change?file=${encodeURIComponent(filename)}`);
+                const data = await response.json();
+                
+                if (data.success && data.data.length > 0) {
+                    // 计算平均涨幅
+                    const validChanges = data.data.filter(item => item.data_available);
+                    if (validChanges.length > 0) {
+                        const avgChange = validChanges.reduce((sum, item) => sum + item.price_change_percent, 0) / validChanges.length;
+                        const changeClass = avgChange > 0 ? 'positive' : (avgChange < 0 ? 'negative' : '');
+                        
+                        cell.innerHTML = `
+                            <span class="${changeClass}" style="font-weight: bold;">${avgChange.toFixed(2)}%</span>
+                            <br>
+                            <button class="btn btn-sm" onclick="showPriceChangeDetail('${filename}')" title="查看详情" style="margin-top: 2px;">📊 详情</button>
+                        `;
+                        
+                        // 缓存数据以供详情查看
+                        window.priceChangeData = window.priceChangeData || {};
+                        window.priceChangeData[filename] = data.data;
+                    } else {
+                        cell.innerHTML = '<span style="color: #999;">无有效数据</span>';
+                    }
+                } else {
+                    cell.innerHTML = `<span style="color: #dc3545;">查询失败</span>`;
+                }
+            } catch (error) {
+                cell.innerHTML = `<span style="color: #dc3545;">网络错误</span>`;
+                console.error('查询价格变化失败:', error);
+            }
+        }
+
+        // 显示价格变化详情
+        function showPriceChangeDetail(filename) {
+            const data = window.priceChangeData && window.priceChangeData[filename];
+            if (!data) {
+                alert('详情数据不可用，请重新查询');
+                return;
+            }
+            
+            const contentDiv = document.getElementById('cache-data-content');
+            const viewDiv = document.getElementById('cache-data-view');
+            
+            displayPriceChangeTable(contentDiv, data, filename);
+            viewDiv.style.display = 'block';
+            viewDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // 显示价格变化表格
+        function displayPriceChangeTable(container, priceData, filename) {
+            if (priceData.length === 0) {
+                container.innerHTML = '<div class="loading">无价格变化数据</div>';
+                return;
+            }
+            
+            let html = `
+                <div class="result-header">
+                    <h4>📈 ${filename} - 距今涨幅详情</h4>
+                    <p>缓存时间与当前价格对比分析</p>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>代码</th>
+                                <th>名称</th>
+                                <th>缓存价格</th>
+                                <th>当前价格</th>
+                                <th>价格变化</th>
+                                <th>涨幅</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            priceData.forEach(stock => {
+                const changeClass = stock.price_change_percent > 0 ? 'positive' : (stock.price_change_percent < 0 ? 'negative' : '');
+                const priceDiff = stock.current_price - stock.cache_price;
+                const statusText = stock.data_available ? '正常' : '无数据';
+                const statusClass = stock.data_available ? 'positive' : 'negative';
+                
+                html += `
+                    <tr>
+                        <td>${stock.code}</td>
+                        <td>${stock.name}</td>
+                        <td>${stock.cache_price.toFixed(2)}</td>
+                        <td>${stock.current_price.toFixed(2)}</td>
+                        <td class="${changeClass}">${priceDiff > 0 ? '+' : ''}${priceDiff.toFixed(2)}</td>
+                        <td class="${changeClass}">${stock.price_change_percent > 0 ? '+' : ''}${stock.price_change_percent.toFixed(2)}%</td>
+                        <td class="${statusClass}">${statusText}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+
+        // 显示缓存数据表格
+        function displayCacheDataTable(container, stocks, fileInfo) {
+            if (stocks.length === 0) {
+                container.innerHTML = '<div class="loading">缓存文件为空</div>';
+                return;
+            }
+            
+            let html = `
+                <div class="result-header">
+                    <h4>📁 ${fileInfo.filename}</h4>
+                    <div class="info-grid" style="margin-bottom: 15px;">
+                        <div class="info-item">
+                            <span class="info-label">记录数：</span>
+                            <span class="info-value">${fileInfo.record_count} 条</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">文件大小：</span>
+                            <span class="info-value">${formatFileSize(fileInfo.size)}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">修改时间：</span>
+                            <span class="info-value">${fileInfo.modified_time}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>代码</th>
+                                <th>名称</th>
+                                <th>涨跌幅</th>
+                                <th>最新价</th>
+                                <th>换手率</th>
+                                <th>量比</th>
+                                <th>流通市值</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            stocks.forEach(stock => {
+                const changeClass = stock.change_percent > 0 ? 'positive' : (stock.change_percent < 0 ? 'negative' : '');
+                html += `
+                    <tr>
+                        <td>${stock.code}</td>
+                        <td>${stock.name}</td>
+                        <td class="${changeClass}">${formatPercent(stock.change_percent)}</td>
+                        <td>${stock.price.toFixed(2)}</td>
+                        <td>${formatPercent(stock.turnover)}</td>
+                        <td>${stock.volume_ratio.toFixed(2)}</td>
+                        <td>${formatNumber(Math.round(stock.market_cap / 100000000))}亿</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = html;
         }
         
         // 页面加载时自动获取当前股票

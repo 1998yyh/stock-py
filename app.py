@@ -8,7 +8,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 # 导入股票筛选模块
-from stock import get_active_stocks, SELECT_CONFIG, INDICATOR_CONFIG, get_data_date_info, start_daily_update_task
+from stock import get_active_stocks, SELECT_CONFIG, INDICATOR_CONFIG, get_data_date_info, start_daily_update_task, get_last_trading_day
 
 app = Flask(__name__)
 CORS(app)  # 允许跨域请求
@@ -43,7 +43,7 @@ def get_current_stocks():
         result = []
         for _, row in stocks.iterrows():
             result.append({
-                'code': row['代码'],
+                'code': str(row['代码']).zfill(6),  # 确保股票代码为6位数字，前导零补全
                 'name': row['名称'],
                 'change_percent': float(row['涨跌幅']) if pd.notna(row['涨跌幅']) else 0,
                 'price': float(row['最新价']) if pd.notna(row['最新价']) else 0,
@@ -58,12 +58,12 @@ def get_current_stocks():
         else:
             # 检查是否从缓存读取
             today_cache = os.path.join("data", f"{datetime.now().strftime('%Y-%m-%d')}_current_stocks.txt")
-            yesterday_cache = os.path.join("data", f"{(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')}_current_stocks.txt")
+            last_trading_day_cache = os.path.join("data", f"{get_last_trading_day()}_current_stocks.txt")
             
             if date_info['is_today_data'] and os.path.exists(today_cache):
                 data_source = "今日缓存"
-            elif not date_info['is_today_data'] and os.path.exists(yesterday_cache):
-                data_source = "昨日缓存"
+            elif not date_info['is_today_data'] and os.path.exists(last_trading_day_cache):
+                data_source = "上个交易日缓存"
             else:
                 data_source = "实时获取"
         
@@ -187,6 +187,174 @@ def clear_cache():
         return jsonify({
             'success': False,
             'message': f'清理缓存失败: {str(e)}'
+        })
+
+@app.route('/api/cache/view', methods=['GET'])
+def view_cache_data():
+    """查看缓存数据"""
+    try:
+        filename = request.args.get('file')
+        if not filename:
+            return jsonify({
+                'success': False,
+                'message': '请指定要查看的缓存文件'
+            })
+        
+        data_dir = "data"
+        file_path = os.path.join(data_dir, filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'message': f'缓存文件不存在: {filename}'
+            })
+        
+        # 读取缓存数据
+        try:
+            # 指定代码列为字符串类型，保留前导零
+            cached_data = pd.read_csv(file_path, sep="\t", encoding="utf-8", dtype={'代码': str})
+            if cached_data.empty:
+                return jsonify({
+                    'success': True,
+                    'message': '缓存文件为空',
+                    'data': [],
+                    'filename': filename
+                })
+            
+            # 转换为API格式
+            result = []
+            for _, row in cached_data.iterrows():
+                result.append({
+                    'code': str(row['代码']).zfill(6),  # 确保股票代码为6位数字，前导零补全
+                    'name': row['名称'],
+                    'change_percent': float(row['涨跌幅']) if pd.notna(row['涨跌幅']) else 0,
+                    'price': float(row['最新价']) if pd.notna(row['最新价']) else 0,
+                    'turnover': float(row['换手率']) if pd.notna(row['换手率']) else 0,
+                    'volume_ratio': float(row['量比']) if pd.notna(row['量比']) else 0,
+                    'market_cap': float(row['流通市值']) if pd.notna(row['流通市值']) else 0
+                })
+            
+            # 获取文件信息
+            file_stat = os.stat(file_path)
+            file_info = {
+                'filename': filename,
+                'size': file_stat.st_size,
+                'modified_time': datetime.fromtimestamp(file_stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+                'record_count': len(result)
+            }
+            
+            return jsonify({
+                'success': True,
+                'message': f'读取缓存数据成功，共 {len(result)} 条记录',
+                'data': result,
+                'file_info': file_info
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'message': f'读取缓存文件失败: {str(e)}'
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'查看缓存数据失败: {str(e)}'
+        })
+
+@app.route('/api/cache/price-change', methods=['GET'])
+def get_cache_price_change():
+    """查询缓存数据的距今涨幅"""
+    try:
+        filename = request.args.get('file')
+        if not filename:
+            return jsonify({
+                'success': False,
+                'message': '请指定要查询的缓存文件'
+            })
+        
+        data_dir = "data"
+        file_path = os.path.join(data_dir, filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'message': f'缓存文件不存在: {filename}'
+            })
+        
+        try:
+            # 读取缓存数据，指定代码列为字符串类型
+            cached_data = pd.read_csv(file_path, sep="\t", encoding="utf-8", dtype={'代码': str})
+            if cached_data.empty:
+                return jsonify({
+                    'success': True,
+                    'message': '缓存文件为空',
+                    'data': []
+                })
+            
+            # 获取当前实时数据
+            try:
+                import akshare as ak
+                current_data = ak.stock_zh_a_spot_em()
+                if current_data.empty:
+                    return jsonify({
+                        'success': False,
+                        'message': '无法获取当前股票数据'
+                    })
+                
+                # 创建当前股价字典，方便查找 - 确保股票代码格式一致
+                current_prices = {}
+                for _, row in current_data.iterrows():
+                    code = str(row['代码']).zfill(6)  # 确保6位代码格式
+                    price = float(row['最新价']) if pd.notna(row['最新价']) else 0
+                    current_prices[code] = price
+                
+                # 计算价格变化
+                result = []
+                for _, row in cached_data.iterrows():
+                    cache_code = str(row['代码']).zfill(6)  # 确保6位代码格式
+                    cache_price = float(row['最新价']) if pd.notna(row['最新价']) else 0
+                    
+                    current_price = current_prices.get(cache_code, 0)
+                    
+                    # 计算涨幅百分比
+                    if cache_price > 0 and current_price > 0:
+                        price_change_percent = ((current_price - cache_price) / cache_price) * 100
+                    else:
+                        price_change_percent = 0
+                    
+                    result.append({
+                        'code': cache_code,
+                        'name': row['名称'],
+                        'cache_price': cache_price,
+                        'current_price': current_price,
+                        'price_change_percent': round(price_change_percent, 2),
+                        'data_available': current_price > 0
+                    })
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'价格对比完成，共 {len(result)} 只股票',
+                    'data': result,
+                    'filename': filename
+                })
+                
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'message': f'获取实时数据失败: {str(e)}'
+                })
+                
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'message': f'读取缓存文件失败: {str(e)}'
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'查询价格变化失败: {str(e)}'
         })
 
 @app.route('/api/config', methods=['GET'])
