@@ -321,6 +321,58 @@
         .btn-danger:hover {
             background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
         }
+        
+        /* 排序相关样式 */
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            transition: background-color 0.2s ease;
+        }
+        
+        .sortable-header:hover {
+            background-color: #e9ecef;
+        }
+        
+        .sort-arrow {
+            margin-left: 5px;
+            font-size: 12px;
+            opacity: 0.6;
+            transition: opacity 0.2s ease;
+        }
+        
+        .sortable-header.active .sort-arrow {
+            opacity: 1;
+            color: #667eea;
+        }
+        
+        .sortable-header::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: 8px;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 4px solid #ccc;
+            opacity: 0.3;
+        }
+        
+        .sortable-header:hover::after {
+            opacity: 0.6;
+        }
+        
+        .sortable-header.active::after {
+            opacity: 1;
+            border-bottom-color: #667eea;
+        }
+        
+        .sortable-header.desc::after {
+            border-bottom: none;
+            border-top: 4px solid #667eea;
+        }
     </style>
 </head>
 <body>
@@ -513,8 +565,12 @@
         function displayStocksTable(container, stocks, message) {
             if (stocks.length === 0) {
                 container.innerHTML = '<div class="loading">无数据</div>';
+                currentStocksData = []; // 清空数据
                 return;
             }
+            
+            // 存储当前数据供排序使用
+            currentStocksData = stocks;
             
             let html = `
                 <div class="result-header">
@@ -527,7 +583,10 @@
                             <tr>
                                 <th>代码</th>
                                 <th>名称</th>
-                                <th>涨跌幅</th>
+                                <th class="sortable-header" onclick="sortTable('change_percent')" title="点击排序">
+                                    涨跌幅
+                                    <span class="sort-arrow" id="sort-arrow-change_percent">↕</span>
+                                </th>
                                 <th>最新价</th>
                                 <th>换手率</th>
                                 <th>量比</th>
@@ -655,8 +714,12 @@
         function displayCacheStatus(container, data) {
             if (data.cache_files.length === 0) {
                 container.innerHTML = '<div class="loading">暂无缓存文件</div>';
+                currentCacheFilesData = []; // 清空数据
                 return;
             }
+            
+            // 存储当前缓存文件数据供排序使用
+            currentCacheFilesData = data.cache_files;
             
             let html = `
                 <div class="result-header">
@@ -667,10 +730,22 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>文件名</th>
-                                <th>类型</th>
-                                <th>大小</th>
-                                <th>修改时间</th>
+                                <th class="sortable-header" onclick="sortCacheFilesTable('filename')" title="点击排序">
+                                    文件名
+                                    <span class="sort-arrow" id="sort-arrow-cache-filename">↕</span>
+                                </th>
+                                <th class="sortable-header" onclick="sortCacheFilesTable('type')" title="点击排序">
+                                    类型
+                                    <span class="sort-arrow" id="sort-arrow-cache-type">↕</span>
+                                </th>
+                                <th class="sortable-header" onclick="sortCacheFilesTable('size')" title="点击排序">
+                                    大小
+                                    <span class="sort-arrow" id="sort-arrow-cache-size">↕</span>
+                                </th>
+                                <th class="sortable-header" onclick="sortCacheFilesTable('modified_time')" title="点击排序">
+                                    修改时间
+                                    <span class="sort-arrow" id="sort-arrow-cache-modified_time">↕</span>
+                                </th>
                                 <th>距今涨幅</th>
                                 <th>操作</th>
                             </tr>
@@ -843,8 +918,12 @@
         function displayPriceChangeTable(container, priceData, filename) {
             if (priceData.length === 0) {
                 container.innerHTML = '<div class="loading">无价格变化数据</div>';
+                currentPriceChangeData = []; // 清空数据
                 return;
             }
+            
+            // 存储当前价格变化数据供排序使用
+            currentPriceChangeData = priceData;
             
             let html = `
                 <div class="result-header">
@@ -857,10 +936,22 @@
                             <tr>
                                 <th>代码</th>
                                 <th>名称</th>
-                                <th>缓存价格</th>
-                                <th>当前价格</th>
-                                <th>价格变化</th>
-                                <th>涨幅</th>
+                                <th class="sortable-header" onclick="sortPriceChangeTable('cache_price')" title="点击排序">
+                                    缓存价格
+                                    <span class="sort-arrow" id="sort-arrow-price-cache_price">↕</span>
+                                </th>
+                                <th class="sortable-header" onclick="sortPriceChangeTable('current_price')" title="点击排序">
+                                    当前价格
+                                    <span class="sort-arrow" id="sort-arrow-price-current_price">↕</span>
+                                </th>
+                                <th class="sortable-header" onclick="sortPriceChangeTable('price_change')" title="点击排序">
+                                    价格变化
+                                    <span class="sort-arrow" id="sort-arrow-price-price_change">↕</span>
+                                </th>
+                                <th class="sortable-header" onclick="sortPriceChangeTable('price_change_percent')" title="点击排序">
+                                    涨幅
+                                    <span class="sort-arrow" id="sort-arrow-price-price_change_percent">↕</span>
+                                </th>
                                 <th>状态</th>
                             </tr>
                         </thead>
@@ -899,8 +990,12 @@
         function displayCacheDataTable(container, stocks, fileInfo) {
             if (stocks.length === 0) {
                 container.innerHTML = '<div class="loading">缓存文件为空</div>';
+                currentCacheData = []; // 清空数据
                 return;
             }
+            
+            // 存储当前缓存数据供排序使用
+            currentCacheData = stocks;
             
             let html = `
                 <div class="result-header">
@@ -926,7 +1021,10 @@
                             <tr>
                                 <th>代码</th>
                                 <th>名称</th>
-                                <th>涨跌幅</th>
+                                <th class="sortable-header" onclick="sortCacheTable('change_percent')" title="点击排序">
+                                    涨跌幅
+                                    <span class="sort-arrow" id="sort-arrow-cache-change_percent">↕</span>
+                                </th>
                                 <th>最新价</th>
                                 <th>换手率</th>
                                 <th>量比</th>
@@ -958,6 +1056,214 @@
             `;
             
             container.innerHTML = html;
+        }
+        
+        // 排序相关变量
+        let currentSortField = null;
+        let currentSortDirection = 'asc'; // 'asc' 或 'desc'
+        let currentStocksData = []; // 存储当前的股票数据
+        let currentCacheData = []; // 存储当前的缓存数据
+        let currentCacheFilesData = []; // 存储当前的缓存文件数据
+        let currentPriceChangeData = []; // 存储当前的价格变化数据
+        
+        // 排序股票表格
+        function sortTable(field) {
+            if (currentStocksData.length === 0) {
+                return;
+            }
+            
+            // 如果点击相同字段，切换排序方向；否则默认降序（从高到低）
+            if (currentSortField === field) {
+                currentSortDirection = currentSortDirection === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentSortField = field;
+                currentSortDirection = 'desc'; // 默认从高到低
+            }
+            
+            // 排序数据
+            const sortedData = [...currentStocksData].sort((a, b) => {
+                let valueA = a[field];
+                let valueB = b[field];
+                
+                // 确保数值比较
+                if (typeof valueA === 'string') valueA = parseFloat(valueA) || 0;
+                if (typeof valueB === 'string') valueB = parseFloat(valueB) || 0;
+                
+                if (currentSortDirection === 'desc') {
+                    return valueB - valueA; // 降序：从高到低
+                } else {
+                    return valueA - valueB; // 升序：从低到高
+                }
+            });
+            
+            // 更新排序指示器
+            updateSortIndicator('sort-arrow-' + field, currentSortDirection);
+            
+            // 重新渲染表格
+            const resultDiv = document.getElementById('current-result');
+            const message = `找到 ${sortedData.length} 只符合条件的股票 (按涨跌幅${currentSortDirection === 'desc' ? '从高到低' : '从低到高'}排序)`;
+            displayStocksTable(resultDiv, sortedData, message);
+        }
+        
+        // 排序缓存表格
+        function sortCacheTable(field) {
+            if (currentCacheData.length === 0) {
+                return;
+            }
+            
+            // 如果点击相同字段，切换排序方向；否则默认降序（从高到低）
+            if (currentSortField === field) {
+                currentSortDirection = currentSortDirection === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentSortField = field;
+                currentSortDirection = 'desc'; // 默认从高到低
+            }
+            
+            // 排序数据
+            const sortedData = [...currentCacheData].sort((a, b) => {
+                let valueA = a[field];
+                let valueB = b[field];
+                
+                // 确保数值比较
+                if (typeof valueA === 'string') valueA = parseFloat(valueA) || 0;
+                if (typeof valueB === 'string') valueB = parseFloat(valueB) || 0;
+                
+                if (currentSortDirection === 'desc') {
+                    return valueB - valueA; // 降序：从高到低
+                } else {
+                    return valueA - valueB; // 升序：从低到高
+                }
+            });
+            
+            // 更新排序指示器
+            updateSortIndicator('sort-arrow-cache-' + field, currentSortDirection);
+            
+            // 重新渲染缓存数据表格
+            const contentDiv = document.getElementById('cache-data-content');
+            const fileInfo = {
+                filename: '排序后数据',
+                size: 0,
+                modified_time: new Date().toLocaleString(),
+                record_count: sortedData.length
+            };
+            displayCacheDataTable(contentDiv, sortedData, fileInfo);
+        }
+        
+        // 排序缓存文件表格
+        function sortCacheFilesTable(field) {
+            if (currentCacheFilesData.length === 0) {
+                return;
+            }
+            
+            // 如果点击相同字段，切换排序方向；否则默认降序（从高到低）
+            if (currentSortField === field) {
+                currentSortDirection = currentSortDirection === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentSortField = field;
+                currentSortDirection = field === 'filename' || field === 'type' ? 'asc' : 'desc'; // 文本字段默认升序
+            }
+            
+            // 排序数据
+            const sortedData = [...currentCacheFilesData].sort((a, b) => {
+                let valueA = a[field];
+                let valueB = b[field];
+                
+                // 根据字段类型进行不同的比较
+                if (field === 'size') {
+                    // 数值比较
+                    valueA = parseInt(valueA) || 0;
+                    valueB = parseInt(valueB) || 0;
+                } else if (field === 'modified_time') {
+                    // 日期比较
+                    valueA = new Date(valueA);
+                    valueB = new Date(valueB);
+                } else {
+                    // 字符串比较
+                    valueA = String(valueA).toLowerCase();
+                    valueB = String(valueB).toLowerCase();
+                }
+                
+                if (currentSortDirection === 'desc') {
+                    return valueB > valueA ? 1 : valueB < valueA ? -1 : 0;
+                } else {
+                    return valueA > valueB ? 1 : valueA < valueB ? -1 : 0;
+                }
+            });
+            
+            // 更新排序指示器
+            updateSortIndicator('sort-arrow-cache-' + field, currentSortDirection);
+            
+            // 重新渲染缓存文件表格
+            const resultDiv = document.getElementById('cache-result');
+            const cacheStatusData = {
+                cache_files: sortedData,
+                total_files: sortedData.length,
+                cache_size: sortedData.reduce((sum, file) => sum + (file.size || 0), 0)
+            };
+            displayCacheStatus(resultDiv, cacheStatusData);
+        }
+        
+        // 排序价格变化表格
+        function sortPriceChangeTable(field) {
+            if (currentPriceChangeData.length === 0) {
+                return;
+            }
+            
+            // 如果点击相同字段，切换排序方向；否则默认降序（从高到低）
+            if (currentSortField === field) {
+                currentSortDirection = currentSortDirection === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentSortField = field;
+                currentSortDirection = 'desc'; // 默认从高到低
+            }
+            
+            // 排序数据
+            const sortedData = [...currentPriceChangeData].sort((a, b) => {
+                let valueA = a[field];
+                let valueB = b[field];
+                
+                // 数值比较
+                if (typeof valueA === 'string') valueA = parseFloat(valueA) || 0;
+                if (typeof valueB === 'string') valueB = parseFloat(valueB) || 0;
+                
+                // 计算价格变化如果需要
+                if (field === 'price_change') {
+                    valueA = a.current_price - a.cache_price;
+                    valueB = b.current_price - b.cache_price;
+                }
+                
+                if (currentSortDirection === 'desc') {
+                    return valueB - valueA; // 降序：从高到低
+                } else {
+                    return valueA - valueB; // 升序：从低到高
+                }
+            });
+            
+            // 更新排序指示器
+            updateSortIndicator('sort-arrow-price-' + field, currentSortDirection);
+            
+            // 重新渲染价格变化表格
+            const contentDiv = document.getElementById('cache-data-content');
+            displayPriceChangeTable(contentDiv, sortedData, '排序后数据');
+        }
+        
+        // 更新排序指示器
+        function updateSortIndicator(arrowId, direction) {
+            // 重置所有排序指示器
+            document.querySelectorAll('.sort-arrow').forEach(arrow => {
+                arrow.textContent = '↕';
+                arrow.parentElement.classList.remove('active', 'desc');
+            });
+            
+            // 更新当前字段的排序指示器
+            const currentArrow = document.getElementById(arrowId);
+            if (currentArrow) {
+                currentArrow.textContent = direction === 'desc' ? '↓' : '↑';
+                currentArrow.parentElement.classList.add('active');
+                if (direction === 'desc') {
+                    currentArrow.parentElement.classList.add('desc');
+                }
+            }
         }
         
         // 页面加载时自动获取当前股票
