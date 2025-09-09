@@ -41,7 +41,7 @@ python app.py
 
 ### 2. 访问系统
 
-打开浏览器访问: http://localhost:5000
+打开浏览器访问: http://8.152.212.206
 
 ## API接口
 

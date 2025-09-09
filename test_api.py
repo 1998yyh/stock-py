@@ -9,7 +9,7 @@ import json
 
 def test_api():
     """测试API接口"""
-    base_url = "http://localhost:5000/api"
+    base_url = "http://8.152.212.206/api"
     
     print("🧪 开始测试API接口...")
     

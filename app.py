@@ -401,5 +401,5 @@ if __name__ == '__main__':
     start_daily_update_task()
     
     print("启动股票筛选服务...")
-    print("访问地址: http://localhost:5000")
+    print("访问地址: http://8.152.212.206")
     app.run(debug=True, host='0.0.0.0', port=5000)
