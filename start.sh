@@ -20,6 +20,6 @@ pip install Flask==2.3.3 Flask-CORS==4.0.0 pandas numpy akshare
 
 # 启动服务
 echo "🌐 启动Web服务..."
-echo "访问地址: http://8.152.212.206"
+echo "访问地址: http://8.152.212.206:5000"
 echo "按 Ctrl+C 停止服务"
 python app.py
