@@ -109,3 +109,11 @@ GET /api/config
 - 前端: HTML + CSS + JavaScript
 - 数据: akshare + pandas + talib
 - 部署: 本地运行，支持Docker部署
+
+
+
+
+查看状态：systemctl status stock-service
+查看日志：journalctl -u stock-service -f
+重启服务：systemctl restart stock-service
+停止服务：systemctl stop stock-service

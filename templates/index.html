@@ -198,11 +198,11 @@
         }
         
         .positive {
-            color: #28a745;
+            color: #dc3545;
         }
         
         .negative {
-            color: #dc3545;
+            color: #28a745;
         }
         
         .config-section {
@@ -457,7 +457,41 @@
     </div>
 
     <script>
-        const API_BASE = 'http://8.152.212.206:5000/api';
+        // 动态获取API配置
+        let API_BASE = '/api'; // 默认相对路径，适用于大多数情况
+        let ENV_INFO = null;
+        
+        // 获取环境配置
+        async function loadEnvConfig() {
+            try {
+                const response = await fetch('/api/config/env');
+                const data = await response.json();
+                if (data.success) {
+                    ENV_INFO = data.data;
+                    API_BASE = ENV_INFO.api_base_url;
+                    console.log(`运行环境: ${ENV_INFO.env}`);
+                    console.log(`API地址: ${API_BASE}`);
+                    
+                    // 显示环境信息
+                    const envIndicator = document.createElement('div');
+                    envIndicator.style.cssText = `
+                        position: fixed;
+                        top: 10px;
+                        right: 10px;
+                        background: ${ENV_INFO.debug ? '#ffc107' : '#28a745'};
+                        color: white;
+                        padding: 5px 10px;
+                        border-radius: 5px;
+                        font-size: 12px;
+                        z-index: 1000;
+                    `;
+                    envIndicator.textContent = ENV_INFO.env;
+                    document.body.appendChild(envIndicator);
+                }
+            } catch (error) {
+                console.warn('无法获取环境配置，使用默认配置:', error);
+            }
+        }
         
         function switchTab(tabName) {
             // 隐藏所有tab内容
@@ -1266,10 +1300,11 @@
             }
         }
         
-        // 页面加载时自动获取当前股票
-        window.onload = function() {
-            refreshTimeInfo(); // 先显示时间信息
-            getCurrentStocks();
+        // 页面加载时初始化
+        window.onload = async function() {
+            await loadEnvConfig(); // 先加载环境配置
+            refreshTimeInfo(); // 显示时间信息
+            getCurrentStocks(); // 获取股票数据
         };
     </script>
 </body>

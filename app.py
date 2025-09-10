@@ -7,7 +7,8 @@ import traceback
 import pandas as pd
 from datetime import datetime, timedelta
 
-# 导入股票筛选模块
+# 导入配置和股票筛选模块
+from config import get_config, HOST, PORT, BASE_URL, API_BASE_URL, DEBUG, ENV_NAME
 from stock import get_active_stocks, SELECT_CONFIG, INDICATOR_CONFIG, get_data_date_info, start_daily_update_task, get_last_trading_day
 
 app = Flask(__name__)
@@ -17,6 +18,27 @@ CORS(app)  # 允许跨域请求
 def index():
     """前端页面"""
     return render_template('index.html')
+
+@app.route('/api/config/env', methods=['GET'])
+def get_env_config():
+    """获取环境配置信息"""
+    try:
+        config = get_config()
+        return jsonify({
+            'success': True,
+            'data': {
+                'env': ENV_NAME,
+                'base_url': BASE_URL,
+                'api_base_url': API_BASE_URL,
+                'debug': DEBUG
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'获取环境配置失败: {str(e)}',
+            'data': {}
+        })
 
 @app.route('/api/stocks/current', methods=['GET'])
 def get_current_stocks():
@@ -401,10 +423,11 @@ if __name__ == '__main__':
     start_daily_update_task()
     
     print("启动股票筛选服务...")
-    print("服务器地址: 8.152.212.206")
-    print("监听端口: 5000")
-    print("访问地址: http://8.152.212.206:5000")
-    print("API地址: http://8.152.212.206:5000/api")
+    print(f"运行环境: {ENV_NAME}")
+    print(f"监听地址: {HOST}:{PORT}")
+    print(f"访问地址: {BASE_URL}")
+    print(f"API地址: {API_BASE_URL}")
+    print(f"调试模式: {DEBUG}")
     
-    # 生产环境配置
-    app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)
+    # 根据配置启动
+    app.run(debug=DEBUG, host=HOST, port=PORT, threaded=True)
