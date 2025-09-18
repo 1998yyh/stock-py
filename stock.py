@@ -105,8 +105,7 @@ STRATEGY_CONFIG = {
 
 
 
-# 新增技术指标函数 ↓
-# @lru_cache(maxsize=100)
+# 技术指标函数
 def get_hist_data(stock_code, end_date=None, lookback_days=60):
     """获取带技术指标的日线数据（支持指定截止日期）。
     :param end_date: 字符串 YYYY-MM-DD 或 YYYYMMDD，默认至今天
@@ -147,11 +146,7 @@ def check_obv(stock_code, period=14, end_date=None):
     # 暂时返回True，因为talib未安装
     return True
 
-# 在导入区域添加 ↓
-# - RSI优先 ：快速排除超买（>70）或超卖（<30）的股票
-# - MACD第二 ：捕捉短期趋势启动信号（金叉）
-# - BOLL第三 ：确认突破布林线上轨的强势形态
-# - OBV最后 ：验证量价同步的健康上涨
+# 技术指标配置
 INDICATOR_CONFIG = {
     'RSI': {
         'enable': True,
@@ -184,14 +179,80 @@ INDICATOR_CONFIG = {
 }
 
 SELECT_CONFIG={
-    'UpDownMin':2,      # 涨跌幅下限(%)
-    'UpDownMax':6,      # 涨跌幅上限(%)
+    'UpDownMin':5,      # 涨跌幅下限(%)
+    'UpDownMax':10,     # 涨跌幅上限(%)
     'TurnoverMin':5,    # 换手率下限(%)
     'TurnoverMax':10,   # 换手率上限(%)
     'ValMin':4000000000,    # 流通市值下限(40亿)
     'ValMax':30000000000,   # 流通市值上限(300亿)
     'Ratio':1           # 量比最小值
 }
+
+def is_trading_day(date=None):
+    """判断指定日期是否为交易日
+    :param date: 指定日期，默认为今天
+    :return: True表示交易日，False表示非交易日
+    """
+    if date is None:
+        check_date = datetime.datetime.now()
+    else:
+        if isinstance(date, str):
+            check_date = datetime.datetime.strptime(date, "%Y-%m-%d")
+        else:
+            check_date = date
+    
+    # 检查是否为周末
+    if check_date.weekday() >= 5:  # 5=周六, 6=周日
+        return False
+    
+    # 检查是否为节假日（这里可以扩展为更完整的节假日判断）
+    # 简单实现：可以在这里添加具体的节假日日期
+    holidays = [
+        # 2024年节假日示例（可根据实际情况更新）
+        "2024-01-01",  # 元旦
+        "2024-02-10", "2024-02-11", "2024-02-12", "2024-02-13", "2024-02-14", "2024-02-15", "2024-02-16", "2024-02-17",  # 春节
+        "2024-04-04", "2024-04-05", "2024-04-06",  # 清明节
+        "2024-05-01", "2024-05-02", "2024-05-03",  # 劳动节
+        "2024-06-10",  # 端午节
+        "2024-09-15", "2024-09-16", "2024-09-17",  # 中秋节
+        "2024-10-01", "2024-10-02", "2024-10-03", "2024-10-04", "2024-10-05", "2024-10-06", "2024-10-07",  # 国庆节
+        
+        # 2025年节假日示例
+        "2025-01-01",  # 元旦
+        "2025-01-28", "2025-01-29", "2025-01-30", "2025-01-31", "2025-02-01", "2025-02-02", "2025-02-03", "2025-02-04",  # 春节
+        "2025-04-05", "2025-04-06", "2025-04-07",  # 清明节
+        "2025-05-01", "2025-05-02", "2025-05-03",  # 劳动节
+        "2025-05-31",  # 端午节
+        "2025-10-01", "2025-10-02", "2025-10-03", "2025-10-04", "2025-10-05", "2025-10-06", "2025-10-07",  # 国庆节
+    ]
+    
+    date_str = check_date.strftime("%Y-%m-%d")
+    if date_str in holidays:
+        return False
+    
+    return True
+
+def get_next_trading_day(date=None):
+    """获取下个交易日日期
+    :param date: 指定日期，默认为今天
+    :return: 下个交易日的日期字符串 (YYYY-MM-DD)
+    """
+    if date is None:
+        current = datetime.datetime.now()
+    else:
+        if isinstance(date, str):
+            current = datetime.datetime.strptime(date, "%Y-%m-%d")
+        else:
+            current = date
+    
+    # 往后推，找到下个交易日
+    next_day = current + datetime.timedelta(days=1)
+    
+    # 循环直到找到交易日
+    while not is_trading_day(next_day):
+        next_day = next_day + datetime.timedelta(days=1)
+    
+    return next_day.strftime("%Y-%m-%d")
 
 def get_last_trading_day(date=None):
     """获取上个交易日日期
@@ -206,14 +267,142 @@ def get_last_trading_day(date=None):
         else:
             current = date
     
-    # 往前推，找到上个工作日
+    # 往前推，找到上个交易日
     last_day = current - datetime.timedelta(days=1)
     
-    # 如果是周末，继续往前推
-    while last_day.weekday() >= 5:  # 5=周六, 6=周日
+    # 循环直到找到交易日
+    while not is_trading_day(last_day):
         last_day = last_day - datetime.timedelta(days=1)
     
     return last_day.strftime("%Y-%m-%d")
+
+def get_stock_data_with_fallback():
+    """
+    获取股票实时数据，支持多数据源备用机制
+    优先使用东财数据源，失败时切换到同花顺数据源
+    """
+    print("🌐 正在获取实时股票数据...")
+    
+    # 尝试东财数据源 (stock_zh_a_spot_em)
+    try:
+        print("📊 尝试使用东财数据源 (akshare.stock_zh_a_spot_em)...")
+        stock_data = ak.stock_zh_a_spot_em()
+        
+        if stock_data is not None and not stock_data.empty:
+            print(f"✅ 东财数据源获取成功，共 {len(stock_data)} 只股票")
+            return stock_data, "东财数据源"
+        else:
+            print("⚠️ 东财数据源返回空数据，尝试备用数据源")
+            raise Exception("东财数据源返回空数据")
+            
+    except Exception as e:
+        print(f"❌ 东财数据源获取失败: {str(e)}")
+        print("🔄 切换到同花顺数据源...")
+        
+    # 尝试同花顺数据源 (stock_zh_a_spot_ths)
+    try:
+        print("📊 尝试使用同花顺数据源 (akshare.stock_zh_a_spot_ths)...")
+        stock_data = ak.stock_zh_a_spot_ths()
+        
+        if stock_data is not None and not stock_data.empty:
+            print(f"✅ 同花顺数据源获取成功，共 {len(stock_data)} 只股票")
+            
+            # 统一字段名称，确保与东财数据源格式一致
+            column_mapping = {
+                '股票代码': '代码',
+                '股票名称': '名称', 
+                '现价': '最新价',
+                '涨跌': '涨跌额',
+                '涨跌幅': '涨跌幅',
+                '今开': '今开',
+                '最高': '最高',
+                '最低': '最低',
+                '昨收': '昨收',
+                '成交量': '成交量',
+                '成交额': '成交额',
+                '换手': '换手率',
+                '市盈率': '市盈率',
+                '市净率': '市净率',
+                '总市值': '总市值',
+                '流通市值': '流通市值'
+            }
+            
+            # 重命名列
+            for old_name, new_name in column_mapping.items():
+                if old_name in stock_data.columns:
+                    stock_data = stock_data.rename(columns={old_name: new_name})
+            
+            # 添加缺失的列（如果同花顺数据源没有）
+            required_columns = ['代码', '名称', '最新价', '涨跌幅', '换手率', '流通市值', '量比']
+            for col in required_columns:
+                if col not in stock_data.columns:
+                    if col == '量比':
+                        stock_data[col] = 1.0  # 默认量比为1
+                    else:
+                        stock_data[col] = 0
+                        
+            return stock_data, "同花顺数据源"
+        else:
+            print("⚠️ 同花顺数据源返回空数据")
+            raise Exception("同花顺数据源返回空数据")
+            
+    except Exception as e:
+        print(f"❌ 同花顺数据源获取失败: {str(e)}")
+        print("🔄 尝试腾讯财经数据源...")
+        
+    # 尝试腾讯财经数据源 (stock_zh_a_spot_tx)
+    try:
+        print("📊 尝试使用腾讯财经数据源 (akshare.stock_zh_a_spot_tx)...")
+        stock_data = ak.stock_zh_a_spot_tx()
+        
+        if stock_data is not None and not stock_data.empty:
+            print(f"✅ 腾讯财经数据源获取成功，共 {len(stock_data)} 只股票")
+            
+            # 统一字段名称
+            column_mapping = {
+                'code': '代码',
+                'name': '名称',
+                'price': '最新价',
+                'change': '涨跌额',
+                'changepercent': '涨跌幅',
+                'open': '今开',
+                'high': '最高',
+                'low': '最低',
+                'settlement': '昨收',
+                'volume': '成交量',
+                'turnoverratio': '换手率',
+                'amount': '成交额',
+                'per': '市盈率',
+                'pb': '市净率',
+                'mktcap': '总市值',
+                'nmc': '流通市值'
+            }
+            
+            # 重命名列
+            for old_name, new_name in column_mapping.items():
+                if old_name in stock_data.columns:
+                    stock_data = stock_data.rename(columns={old_name: new_name})
+            
+            # 添加缺失的列
+            required_columns = ['代码', '名称', '最新价', '涨跌幅', '换手率', '流通市值', '量比']
+            for col in required_columns:
+                if col not in stock_data.columns:
+                    if col == '量比':
+                        stock_data[col] = 1.0  # 默认量比为1
+                    else:
+                        stock_data[col] = 0
+                        
+            return stock_data, "腾讯财经数据源"
+        else:
+            print("⚠️ 腾讯财经数据源返回空数据")
+            raise Exception("腾讯财经数据源返回空数据")
+            
+    except Exception as e:
+        print(f"❌ 腾讯财经数据源获取失败: {str(e)}")
+        
+    # 所有数据源都失败
+    print("❌ 所有数据源都无法获取数据，请检查网络连接或稍后重试")
+    return pd.DataFrame(), "无可用数据源"
 
 def get_data_date_info():
     """获取数据对应的日期信息"""
@@ -267,9 +456,18 @@ def get_active_stocks(use_cache=True, save_cache=True, force_refresh=False):
         if os.path.exists(last_trading_day_cache):
             try:
                 print(f"📁 14:50前，从缓存读取上个交易日数据: {last_trading_day_cache}")
-                cached_data = pd.read_csv(last_trading_day_cache, sep="\t", encoding="utf-8")
+                cached_data = pd.read_csv(last_trading_day_cache, sep="\t", encoding="utf-8", comment='#')
                 if not cached_data.empty:
-                    print(f"✅ 上个交易日缓存数据加载成功，共 {len(cached_data)} 只股票")
+                    # 尝试读取数据源信息
+                    data_source_info = "未知数据源"
+                    try:
+                        with open(last_trading_day_cache, 'r', encoding='utf-8') as f:
+                            first_line = f.readline().strip()
+                            if first_line.startswith("# 数据来源:"):
+                                data_source_info = first_line.replace("# 数据来源:", "").strip()
+                    except:
+                        pass
+                    print(f"✅ 上个交易日缓存数据加载成功，共 {len(cached_data)} 只股票 (数据源: {data_source_info})")
                     return cached_data
             except Exception as e:
                 print(f"⚠️ 上个交易日缓存读取失败: {e}")
@@ -280,26 +478,39 @@ def get_active_stocks(use_cache=True, save_cache=True, force_refresh=False):
         if os.path.exists(today_cache):
             try:
                 print(f"📁 从缓存读取今日数据: {today_cache}")
-                cached_data = pd.read_csv(today_cache, sep="\t", encoding="utf-8")
+                cached_data = pd.read_csv(today_cache, sep="\t", encoding="utf-8", comment='#')
                 if not cached_data.empty:
-                    print(f"✅ 今日缓存数据加载成功，共 {len(cached_data)} 只股票")
+                    # 尝试读取数据源信息
+                    data_source_info = "未知数据源"
+                    try:
+                        with open(today_cache, 'r', encoding='utf-8') as f:
+                            first_line = f.readline().strip()
+                            if first_line.startswith("# 数据来源:"):
+                                data_source_info = first_line.replace("# 数据来源:", "").strip()
+                    except:
+                        pass
+                    print(f"✅ 今日缓存数据加载成功，共 {len(cached_data)} 只股票 (数据源: {data_source_info})")
                     return cached_data
             except Exception as e:
                 print(f"⚠️ 今日缓存读取失败: {e}，将重新获取数据")
     
-    # 获取实时数据
-    print("🌐 正在获取实时股票数据...")
-    stock_data = ak.stock_zh_a_spot_em()
+    # 获取实时数据（使用备用数据源机制）
+    stock_data, data_source = get_stock_data_with_fallback()
     if stock_data.empty:
-        print("未能获取到 A 股实时数据")
+        print("❌ 未能从任何数据源获取到 A 股实时数据")
         return pd.DataFrame()
+    
+    print(f"📊 数据来源: {data_source}")
+    print(f"🔢 获取到股票总数: {len(stock_data)}")
+    
+    # 显示数据列信息用于调试
+    print(f"📋 数据列名: {list(stock_data.columns)}")
 
     # 转换数值类型，防止 NaN 数据
     for col in ["换手率", "涨跌幅", "流通市值", "量比"]:
         stock_data[col] = pd.to_numeric(stock_data[col], errors="coerce")
 
     selected_stocks = stock_data[stock_data["代码"].str.startswith(("00", "60"))]
-    # print(pd.DataFrame(selected_stocks))
 
     filtered_stocks = selected_stocks[
         (selected_stocks["涨跌幅"] >=SELECT_CONFIG['UpDownMin']) & 
@@ -313,24 +524,12 @@ def get_active_stocks(use_cache=True, save_cache=True, force_refresh=False):
     if filtered_stocks.empty:
         print("\nx 没有符合初步筛选条件的股票")
         return pd.DataFrame()
-
-    # print(pd.DataFrame(filtered_stocks))
     # **打印筛选出的股票**
     print("\n===== 初步筛选出的股票 =====")
     for index, row in filtered_stocks.iterrows():
         print(f"代码: {row['代码']} | 名称: {row['名称']}-- {row['涨跌幅']}%")
     
-    # 使用策略配置进行循环筛选
-    # for config in STRATEGY_CONFIG.items():
-    #     if not config['enable']:
-    #         continue
-            
-    #     filtered_stocks = filtered_stocks[filtered_stocks["代码"].apply(config['func'])]
-    #     if filtered_stocks.empty:
-    #         print(f"\nx {config['msg']}，停止筛选")
-    #         return pd.DataFrame()
-
-    # 新增技术指标筛选 ↓
+    # 技术指标筛选
     print("\n===== 技术指标筛选 =====")
     
     for indicator_name, config in INDICATOR_CONFIG.items():
@@ -341,15 +540,25 @@ def get_active_stocks(use_cache=True, save_cache=True, force_refresh=False):
             if filtered_stocks.empty:
                 return pd.DataFrame()
 
-    # 保存缓存
+    # 保存缓存（包含数据源信息）
     if save_cache and not filtered_stocks.empty:
         try:
             os.makedirs("data", exist_ok=True)
             # 保存时使用今日日期
             save_date = datetime.datetime.now().strftime("%Y-%m-%d")
             cache_file = os.path.join("data", f"{save_date}_current_stocks.txt")
-            filtered_stocks.to_csv(cache_file, sep="\t", index=False, encoding="utf-8")
-            print(f"💾 数据已缓存至: {cache_file}")
+            
+            # 添加数据源信息到文件头部
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                # 写入元数据信息
+                f.write(f"# 数据来源: {data_source}\n")
+                f.write(f"# 生成时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"# 股票数量: {len(filtered_stocks)}\n")
+                f.write("# " + "="*50 + "\n")
+                
+            # 追加数据内容
+            filtered_stocks.to_csv(cache_file, sep="\t", index=False, encoding="utf-8", mode='a')
+            print(f"💾 数据已缓存至: {cache_file} (数据源: {data_source})")
         except Exception as e:
             print(f"⚠️ 缓存保存失败: {e}")
 
@@ -358,63 +567,66 @@ def get_active_stocks(use_cache=True, save_cache=True, force_refresh=False):
 
 
 
-if __name__ == "__main__":
-    active_stocks = get_active_stocks()
-    # pd.set_option("display.float_format", "{:.2f}".format)
-
-    if active_stocks.empty:
-        print("\n- 无符合条件的股票，程序结束")
-    else:
-        # print(active_stocks[["代码", "名称", "最新价", "涨跌幅", "流通市值", "换手率", "量比"]].to_string(index=False))
-        print( pd.DataFrame(active_stocks,columns=["代码","名称","涨跌幅", "最新价",   "换手率", "量比","流通市值"]))
-
-        # 获取次日日期
-        tomorrow = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-
-        # 目标文件夹路径
-        folder_path = r"data"
-        os.makedirs(folder_path, exist_ok=True)
-
-        # 生成 TXT 文件路径
-        file_path = os.path.join(folder_path, f"{tomorrow}.txt")
-
-        # 保存数据到 TXT
-        active_stocks.to_csv(file_path, sep="\t", index=False, encoding="utf-8")
-        print(f"数据已保存至 {file_path}")
+# 测试代码已移除，请使用API接口进行测试
 
 def auto_daily_update():
-    """自动每日更新任务：在14:50自动获取今日数据"""
+    """自动每日更新任务：只在交易日的14:50自动获取数据"""
     while True:
         try:
             now = datetime.datetime.now()
             target_time = datetime.time(14, 50)  # 14:50
             current_time = now.time()
             
-            # 计算到目标时间的等待时间
-            if current_time < target_time:
-                # 今天还没到14:50
-                target_datetime = datetime.datetime.combine(now.date(), target_time)
-            else:
-                # 今天已过14:50，等待明天14:50
-                tomorrow = now.date() + datetime.timedelta(days=1)
-                target_datetime = datetime.datetime.combine(tomorrow, target_time)
+            # 检查今天是否为交易日
+            today_is_trading_day = is_trading_day(now)
             
-            wait_seconds = (target_datetime - now).total_seconds()
-            print(f"⏰ 定时任务启动，将在 {target_datetime.strftime('%Y-%m-%d %H:%M:%S')} 自动更新今日数据")
-            
-            # 等待到目标时间
-            time.sleep(wait_seconds)
-            
-            # 执行数据更新
-            print("🚀 开始自动更新今日股票数据...")
-            try:
-                stocks = get_active_stocks(use_cache=False, save_cache=True, force_refresh=True)
-                if not stocks.empty:
-                    print(f"✅ 自动更新完成，获取到 {len(stocks)} 只股票")
+            if today_is_trading_day:
+                # 今天是交易日
+                if current_time < target_time:
+                    # 今天还没到14:50，等待到14:50
+                    target_datetime = datetime.datetime.combine(now.date(), target_time)
+                    wait_seconds = (target_datetime - now).total_seconds()
+                    print(f"⏰ 今日为交易日，将在 {target_datetime.strftime('%Y-%m-%d %H:%M:%S')} 自动更新股票数据")
+                    time.sleep(wait_seconds)
+                    
+                    # 执行数据更新
+                    print("🚀 开始自动更新今日股票数据...")
+                    try:
+                        stocks = get_active_stocks(use_cache=False, save_cache=True, force_refresh=True)
+                        if not stocks.empty:
+                            print(f"✅ 自动更新完成，获取到 {len(stocks)} 只股票")
+                        else:
+                            print("⚠️ 自动更新完成，但未获取到股票数据")
+                    except Exception as e:
+                        print(f"❌ 自动更新失败: {e}")
+                    
+                    # 更新完成后，等待到下个交易日
+                    next_trading_day = get_next_trading_day(now)
+                    next_target = datetime.datetime.strptime(f"{next_trading_day} 14:50:00", "%Y-%m-%d %H:%M:%S")
+                    wait_seconds = (next_target - datetime.datetime.now()).total_seconds()
+                    print(f"📅 下次数据更新时间: {next_target.strftime('%Y-%m-%d %H:%M:%S')} (下个交易日)")
+                    time.sleep(max(wait_seconds, 60))  # 至少等待1分钟
                 else:
-                    print("⚠️ 自动更新完成，但未获取到股票数据")
-            except Exception as e:
-                print(f"❌ 自动更新失败: {e}")
+                    # 今天是交易日但已过14:50，等待到下个交易日
+                    next_trading_day = get_next_trading_day(now)
+                    next_target = datetime.datetime.strptime(f"{next_trading_day} 14:50:00", "%Y-%m-%d %H:%M:%S")
+                    wait_seconds = (next_target - now).total_seconds()
+                    print(f"⏰ 今日已过更新时间，等待下个交易日 {next_target.strftime('%Y-%m-%d %H:%M:%S')} 更新")
+                    time.sleep(max(wait_seconds, 60))
+            else:
+                # 今天不是交易日，等待到下个交易日
+                next_trading_day = get_next_trading_day(now)
+                next_target = datetime.datetime.strptime(f"{next_trading_day} 14:50:00", "%Y-%m-%d %H:%M:%S")
+                wait_seconds = (next_target - now).total_seconds()
+                
+                # 判断今天是周末还是节假日
+                if now.weekday() >= 5:
+                    day_type = "周末"
+                else:
+                    day_type = "节假日"
+                
+                print(f"📅 今日为{day_type}，不进行数据更新，等待下个交易日 {next_target.strftime('%Y-%m-%d %H:%M:%S')}")
+                time.sleep(max(wait_seconds, 3600))  # 非交易日至少等待1小时
                 
         except Exception as e:
             print(f"⚠️ 定时任务异常: {e}")
@@ -425,4 +637,22 @@ def start_daily_update_task():
     """启动后台定时更新任务"""
     task_thread = threading.Thread(target=auto_daily_update, daemon=True)
     task_thread.start()
-    print("📅 后台定时更新任务已启动")
+    
+    # 显示任务启动信息
+    now = datetime.datetime.now()
+    today_is_trading_day = is_trading_day(now)
+    
+    if today_is_trading_day:
+        next_update = datetime.datetime.combine(now.date(), datetime.time(14, 50))
+        if now.time() >= datetime.time(14, 50):
+            # 今天已过更新时间，显示下个交易日
+            next_trading_day = get_next_trading_day(now)
+            next_update = datetime.datetime.strptime(f"{next_trading_day} 14:50:00", "%Y-%m-%d %H:%M:%S")
+        print(f"📅 后台定时更新任务已启动（仅交易日运行）")
+        print(f"⏰ 下次更新时间: {next_update.strftime('%Y-%m-%d %H:%M:%S')}")
+    else:
+        next_trading_day = get_next_trading_day(now)
+        next_update = datetime.datetime.strptime(f"{next_trading_day} 14:50:00", "%Y-%m-%d %H:%M:%S")
+        day_type = "周末" if now.weekday() >= 5 else "节假日"
+        print(f"📅 后台定时更新任务已启动（仅交易日运行）")
+        print(f"📝 今日为{day_type}，下次更新时间: {next_update.strftime('%Y-%m-%d %H:%M:%S')}")

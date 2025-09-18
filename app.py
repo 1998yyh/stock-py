@@ -78,14 +78,27 @@ def get_current_stocks():
         if force_refresh:
             data_source = "强制刷新"
         else:
-            # 检查是否从缓存读取
+            # 检查是否从缓存读取，并尝试获取具体的数据源信息
             today_cache = os.path.join("data", f"{datetime.now().strftime('%Y-%m-%d')}_current_stocks.txt")
             last_trading_day_cache = os.path.join("data", f"{get_last_trading_day()}_current_stocks.txt")
             
+            def get_cache_data_source(cache_file):
+                """从缓存文件中读取数据源信息"""
+                try:
+                    with open(cache_file, 'r', encoding='utf-8') as f:
+                        first_line = f.readline().strip()
+                        if first_line.startswith("# 数据来源:"):
+                            return first_line.replace("# 数据来源:", "").strip()
+                except:
+                    pass
+                return "缓存数据"
+            
             if date_info['is_today_data'] and os.path.exists(today_cache):
-                data_source = "今日缓存"
+                cache_source = get_cache_data_source(today_cache)
+                data_source = f"今日缓存 ({cache_source})"
             elif not date_info['is_today_data'] and os.path.exists(last_trading_day_cache):
-                data_source = "上个交易日缓存"
+                cache_source = get_cache_data_source(last_trading_day_cache)
+                data_source = f"上个交易日缓存 ({cache_source})"
             else:
                 data_source = "实时获取"
         
