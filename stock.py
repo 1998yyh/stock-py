@@ -299,32 +299,32 @@ def get_stock_data_with_fallback():
         print(f"❌ 东财数据源获取失败: {str(e)}")
         print("🔄 切换到同花顺数据源...")
         
-    # 尝试同花顺数据源 (stock_zh_a_spot_ths)
+    # 尝试新浪数据源 (stock_zh_a_spot)
     try:
-        print("📊 尝试使用同花顺数据源 (akshare.stock_zh_a_spot_ths)...")
-        stock_data = ak.stock_zh_a_spot_ths()
+        print("📊 尝试使用新浪数据源 (akshare.stock_zh_a_spot)...")
+        stock_data = ak.stock_zh_a_spot()
         
         if stock_data is not None and not stock_data.empty:
-            print(f"✅ 同花顺数据源获取成功，共 {len(stock_data)} 只股票")
+            print(f"✅ 新浪数据源获取成功，共 {len(stock_data)} 只股票")
             
             # 统一字段名称，确保与东财数据源格式一致
             column_mapping = {
-                '股票代码': '代码',
-                '股票名称': '名称', 
-                '现价': '最新价',
-                '涨跌': '涨跌额',
-                '涨跌幅': '涨跌幅',
-                '今开': '今开',
-                '最高': '最高',
-                '最低': '最低',
-                '昨收': '昨收',
-                '成交量': '成交量',
-                '成交额': '成交额',
-                '换手': '换手率',
-                '市盈率': '市盈率',
-                '市净率': '市净率',
-                '总市值': '总市值',
-                '流通市值': '流通市值'
+                'symbol': '代码',
+                'name': '名称', 
+                'trade': '最新价',
+                'pricechange': '涨跌额',
+                'changepercent': '涨跌幅',
+                'open': '今开',
+                'high': '最高',
+                'low': '最低',
+                'settlement': '昨收',
+                'volume': '成交量',
+                'amount': '成交额',
+                'turnoverratio': '换手率',
+                'per': '市盈率',
+                'pb': '市净率',
+                'mktcap': '总市值',
+                'nmc': '流通市值'
             }
             
             # 重命名列
@@ -341,49 +341,31 @@ def get_stock_data_with_fallback():
                     else:
                         stock_data[col] = 0
                         
-            return stock_data, "同花顺数据源"
+            return stock_data, "新浪数据源"
         else:
-            print("⚠️ 同花顺数据源返回空数据")
-            raise Exception("同花顺数据源返回空数据")
+            print("⚠️ 新浪数据源返回空数据")
+            raise Exception("新浪数据源返回空数据")
             
     except Exception as e:
-        print(f"❌ 同花顺数据源获取失败: {str(e)}")
-        print("🔄 尝试腾讯财经数据源...")
+        print(f"❌ 新浪数据源获取失败: {str(e)}")
+        print("🔄 尝试上海A股数据源...")
         
-    # 尝试腾讯财经数据源 (stock_zh_a_spot_tx)
+    # 尝试上海A股数据源 (stock_sh_a_spot_em)
     try:
-        print("📊 尝试使用腾讯财经数据源 (akshare.stock_zh_a_spot_tx)...")
-        stock_data = ak.stock_zh_a_spot_tx()
+        print("📊 尝试使用上海A股数据源 (akshare.stock_sh_a_spot_em)...")
+        sh_stock_data = ak.stock_sh_a_spot_em()
+        print("📊 尝试使用深圳A股数据源 (akshare.stock_sz_a_spot_em)...")
+        sz_stock_data = ak.stock_sz_a_spot_em()
+        
+        # 合并上海和深圳的数据
+        import pandas as pd
+        stock_data = pd.concat([sh_stock_data, sz_stock_data], ignore_index=True)
         
         if stock_data is not None and not stock_data.empty:
-            print(f"✅ 腾讯财经数据源获取成功，共 {len(stock_data)} 只股票")
+            print(f"✅ 沪深A股数据源获取成功，共 {len(stock_data)} 只股票")
             
-            # 统一字段名称
-            column_mapping = {
-                'code': '代码',
-                'name': '名称',
-                'price': '最新价',
-                'change': '涨跌额',
-                'changepercent': '涨跌幅',
-                'open': '今开',
-                'high': '最高',
-                'low': '最低',
-                'settlement': '昨收',
-                'volume': '成交量',
-                'turnoverratio': '换手率',
-                'amount': '成交额',
-                'per': '市盈率',
-                'pb': '市净率',
-                'mktcap': '总市值',
-                'nmc': '流通市值'
-            }
-            
-            # 重命名列
-            for old_name, new_name in column_mapping.items():
-                if old_name in stock_data.columns:
-                    stock_data = stock_data.rename(columns={old_name: new_name})
-            
-            # 添加缺失的列
+            # 沪深A股数据源字段格式与东财相同，无需映射
+            # 但需要添加缺失的量比字段
             required_columns = ['代码', '名称', '最新价', '涨跌幅', '换手率', '流通市值', '量比']
             for col in required_columns:
                 if col not in stock_data.columns:
@@ -392,13 +374,13 @@ def get_stock_data_with_fallback():
                     else:
                         stock_data[col] = 0
                         
-            return stock_data, "腾讯财经数据源"
+            return stock_data, "沪深A股数据源"
         else:
-            print("⚠️ 腾讯财经数据源返回空数据")
-            raise Exception("腾讯财经数据源返回空数据")
+            print("⚠️ 沪深A股数据源返回空数据")
+            raise Exception("沪深A股数据源返回空数据")
             
     except Exception as e:
-        print(f"❌ 腾讯财经数据源获取失败: {str(e)}")
+        print(f"❌ 沪深A股数据源获取失败: {str(e)}")
         
     # 所有数据源都失败
     print("❌ 所有数据源都无法获取数据，请检查网络连接或稍后重试")

@@ -19,7 +19,3 @@ API地址: http://localhost:5000/api
   warnings.warn(
  * Debugger is active!
  * Debugger PIN: 690-382-212
-127.0.0.1 - - [19/Sep/2025 15:56:18] "GET /api/cache/view?file=2025-09-19_current_stocks.txt HTTP/1.1" 200 -
-127.0.0.1 - - [19/Sep/2025 15:56:24] "GET /api/cache/view?file=2025-09-10_current_stocks.txt HTTP/1.1" 200 -
-127.0.0.1 - - [19/Sep/2025 15:57:01] "GET /api/cache/price-change?file=2025-09-19_current_stocks.txt HTTP/1.1" 200 -
-127.0.0.1 - - [19/Sep/2025 15:57:16] "GET /api/cache/status HTTP/1.1" 200 -
