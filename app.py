@@ -246,8 +246,8 @@ def view_cache_data():
         
         # 读取缓存数据
         try:
-            # 指定代码列为字符串类型，保留前导零
-            cached_data = pd.read_csv(file_path, sep="\t", encoding="utf-8", dtype={'代码': str})
+            # 指定代码列为字符串类型，保留前导零，跳过注释行
+            cached_data = pd.read_csv(file_path, sep="\t", encoding="utf-8", dtype={'代码': str}, comment='#')
             if cached_data.empty:
                 return jsonify({
                     'success': True,
@@ -318,8 +318,8 @@ def get_cache_price_change():
             })
         
         try:
-            # 读取缓存数据，指定代码列为字符串类型
-            cached_data = pd.read_csv(file_path, sep="\t", encoding="utf-8", dtype={'代码': str})
+            # 读取缓存数据，指定代码列为字符串类型，跳过注释行
+            cached_data = pd.read_csv(file_path, sep="\t", encoding="utf-8", dtype={'代码': str}, comment='#')
             if cached_data.empty:
                 return jsonify({
                     'success': True,
